@@ -90,6 +90,8 @@ fun MapScreen(
             isDarkTheme = uiState.isDarkTheme,
             geoJsonData = viewModel.getGeoJsonData(),
             selectedStop = uiState.selectedStop,
+            focusTarget = uiState.focusTarget,
+            focusToken = uiState.focusToken,
             sheetPosition = uiState.sheetPosition,
             onStopClicked = { stopId ->
                 val stop = viewModel.getStopById(stopId)
@@ -212,10 +214,9 @@ fun MapScreen(
                 IconButton(
                     onClick = {
                         if (uiState.hasLocationPermission) {
+                            // Resolves the location, refreshes the nearby list and
+                            // emits a one-shot camera move once it has the fix.
                             viewModel.refreshLocationAndNearby()
-                            uiState.userLocation?.let { loc ->
-                                viewModel.updateCameraCenter(loc.latitude, loc.longitude)
-                            }
                         } else {
                             locationPermissionLauncher.launch(
                                 arrayOf(

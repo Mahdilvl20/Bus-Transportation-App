@@ -46,7 +46,11 @@ data class BusUiState(
     val userLocation: Location? = null,
     val cameraCenter: Pair<Double, Double> = 32.6480 to 51.6673, // Isfahan center: lat, lng
     val isDarkTheme: Boolean = false,
-    val notice: NoticeResponse? = null
+    val notice: NoticeResponse? = null,
+    // One-shot camera request (lat, lng). focusToken increments so an identical
+    // target still triggers a new move — the map only ever reacts to the token.
+    val focusTarget: Pair<Double, Double>? = null,
+    val focusToken: Int = 0
 )
 
 class BusViewModel(application: Application) : AndroidViewModel(application) {
@@ -176,6 +180,10 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
                 if (loc != null) {
                     _uiState.value = _uiState.value.copy(userLocation = loc)
                     updateNearbyStops(loc.latitude, loc.longitude)
+                    // Emit only now: the location is resolved, and this is what
+                    // actually moves the camera (the old call read state too early
+                    // and updated a field no camera code ever read).
+                    emitFocus(loc.latitude, loc.longitude)
                     return@launch
                 }
             }
@@ -183,6 +191,13 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
             val (lat, lng) = _uiState.value.cameraCenter
             updateNearbyStops(lat, lng)
         }
+    }
+
+    private fun emitFocus(lat: Double, lng: Double) {
+        _uiState.value = _uiState.value.copy(
+            focusTarget = lat to lng,
+            focusToken = _uiState.value.focusToken + 1
+        )
     }
 
     private fun updateNearbyStops(lat: Double, lng: Double) {

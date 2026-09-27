@@ -24,4 +24,6 @@
     <string name="arrivals_loading">در حال دریافت زمان رسیدن اتوبوس‌ها...</string>
     <string name="toggle_theme">تغییر پوسته</string>
     <string name="my_location">موقعیت من</string>
+    <string name="map_load_failed">نقشه بارگذاری نشد</string>
+    <string name="map_load_failed_desc">ارتباط با سرور نقشه برقرار نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.</string>
 </resources>

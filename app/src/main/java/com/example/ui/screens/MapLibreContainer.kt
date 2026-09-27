@@ -4,7 +4,17 @@ import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.PointF
 import android.graphics.RectF
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -12,14 +22,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.R
 import com.example.model.Stop
 import com.example.ui.viewmodel.SheetPosition
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -58,14 +74,23 @@ private const val LAYER_STOP_CIRCLE = "stop-circle"
 private const val LAYER_STOP_HALO = "stop-halo"
 private const val LAYER_NEAREST_RING = "nearest-ring"
 
-private const val STYLE_LIGHT = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-private const val STYLE_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+// OpenFreeMap answers in under a second on this network; Carto's style.json times out,
+// so it is only a backup. Both are keyless.
+private const val STYLE_LIGHT = "https://tiles.openfreemap.org/styles/positron"
+private const val STYLE_DARK = "https://tiles.openfreemap.org/styles/dark"
+private const val STYLE_LIGHT_FALLBACK = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+private const val STYLE_DARK_FALLBACK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+
+/** How long to wait for one style before trying the next. */
+private const val STYLE_TIMEOUT_MS = 8_000L
 
 @Composable
 fun MapLibreContainer(
     isDarkTheme: Boolean,
     geoJsonData: String,
     selectedStop: Stop?,
+    focusTarget: Pair<Double, Double>?,
+    focusToken: Int,
     sheetPosition: SheetPosition,
     onStopClicked: (Long) -> Unit,
     onCameraCenterChanged: (Double, Double) -> Unit,
@@ -82,6 +107,11 @@ fun MapLibreContainer(
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var currentStyleUri by remember { mutableStateOf(if (isDarkTheme) STYLE_DARK else STYLE_LIGHT) }
     var haloAnimator by remember { mutableStateOf<ValueAnimator?>(null) }
+    // True only when every style candidate failed — the map must never fail silently.
+    var styleError by remember { mutableStateOf(false) }
+    var styleRetry by remember { mutableStateOf(0) }
+    // Set once the layers exist, so effects below can find the halo animator.
+    var styleReady by remember { mutableStateOf(false) }
 
     // Setup MapView
     val mapView = remember {
@@ -94,7 +124,10 @@ fun MapLibreContainer(
                     .zoom(12.0)
                     .build()
 
-                map.addOnCameraMoveListener {
+                // Idle, not move: the move listener fired ~60x/second while panning,
+                // and each call wrote to UiState (recomposing the whole screen) and
+                // re-sorted all 3,002 stops when GPS permission was missing.
+                map.addOnCameraIdleListener {
                     val target = map.cameraPosition.target
                     if (target != null) {
                         onCameraCenterChanged(target.latitude, target.longitude)
@@ -245,7 +278,11 @@ fun MapLibreContainer(
         }
         style.addLayer(stopHaloLayer)
 
-        // Pulse ValueAnimator (13 -> 22 radius, 0.9 -> 0.25 opacity, 1600ms)
+        // Pulse ValueAnimator (13 -> 22 radius, 0.9 -> 0.25 opacity, 1600ms).
+        // Created here but NOT started: an infinite animator calls getStyle +
+        // setProperties on every frame, which invalidates the layer and forces a
+        // full re-render ~60x/s. Running it with nothing selected burns CPU for
+        // nothing, so it is started only while a stop is selected.
         haloAnimator?.cancel()
         haloAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 1600
@@ -263,18 +300,60 @@ fun MapLibreContainer(
                     )
                 }
             }
-            start()
         }
+        styleReady = true
     }
 
-    // Handle Theme Switch and critical style re-load
+    // Load the base style. Keyed on mapInstance as well as the theme: getMapAsync()
+    // completes *after* first composition, so without that key the first load was
+    // silently skipped and the map stayed black for the whole session.
     val targetStyleUri = if (isDarkTheme) STYLE_DARK else STYLE_LIGHT
-    LaunchedEffect(targetStyleUri) {
+    LaunchedEffect(targetStyleUri, mapInstance, styleRetry) {
         val map = mapInstance ?: return@LaunchedEffect
         currentStyleUri = targetStyleUri
-        map.setStyle(Style.Builder().fromUri(targetStyleUri)) { style ->
-            setupLayersOnStyle(style, geoJsonData)
+        styleError = false
+        styleReady = false
+        val candidates = listOf(
+            targetStyleUri,
+            if (isDarkTheme) STYLE_DARK_FALLBACK else STYLE_LIGHT_FALLBACK,
+        )
+        var loaded = false
+        for (uri in candidates) {
+            val outcome = CompletableDeferred<Boolean>()
+            val onFail = object : MapView.OnDidFailLoadingMapListener {
+                override fun onDidFailLoadingMap(reason: String) {
+                    if (!outcome.isCompleted) outcome.complete(false)
+                }
+            }
+            mapView.addOnDidFailLoadingMapListener(onFail)
+            map.setStyle(Style.Builder().fromUri(uri)) { style ->
+                if (!outcome.isCompleted) outcome.complete(true)
+                setupLayersOnStyle(style, geoJsonData)
+            }
+            loaded = withTimeoutOrNull(STYLE_TIMEOUT_MS) { outcome.await() } ?: false
+            mapView.removeOnDidFailLoadingMapListener(onFail)
+            if (loaded) break
         }
+        styleError = !loaded
+    }
+
+    // Run the halo pulse only while a stop is selected. Unconditional it would
+    // re-render the map ~60 times a second for the whole session.
+    LaunchedEffect(styleReady, selectedStop) {
+        if (styleReady && selectedStop != null) haloAnimator?.start()
+        else haloAnimator?.cancel()
+    }
+
+    // One-shot camera move requested by the ViewModel ("my location"). Keyed on
+    // mapInstance as well so a press made before the map finished loading is not lost.
+    LaunchedEffect(focusToken, mapInstance) {
+        if (focusToken == 0) return@LaunchedEffect
+        val target = focusTarget ?: return@LaunchedEffect
+        val map = mapInstance ?: return@LaunchedEffect
+        map.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(LatLng(target.first, target.second), 16.0),
+            600
+        )
     }
 
     // Update GeoJSON source when selection or nearest change
@@ -323,10 +402,39 @@ fun MapLibreContainer(
         }
     }
 
-    AndroidView(
-        factory = { mapView },
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("maplibre_view")
-    )
+    Box(modifier = modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { mapView },
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("maplibre_view")
+        )
+
+        // A visible failure beats a black screen: the user can retry instead of guessing.
+        if (styleError) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(R.string.map_load_failed),
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.map_load_failed_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { styleRetry++ }) {
+                    Text(stringResource(R.string.retry))
+                }
+            }
+        }
+    }
 }
