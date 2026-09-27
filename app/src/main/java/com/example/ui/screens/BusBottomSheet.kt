@@ -224,8 +224,7 @@ fun BusBottomSheet(
                                 arrivals = arrivals,
                                 isLoading = isArrivalsLoading,
                                 hasError = arrivalsError,
-                                secondsSinceUpdate = secondsSinceUpdate,
-                                maxItems = if (sheetPosition == SheetPosition.HALF) 3 else null
+                                secondsSinceUpdate = secondsSinceUpdate
                             )
                         }
 

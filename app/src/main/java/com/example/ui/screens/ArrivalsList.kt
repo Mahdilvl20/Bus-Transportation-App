@@ -47,10 +47,8 @@ fun ArrivalsList(
     isLoading: Boolean,
     hasError: Boolean,
     secondsSinceUpdate: Int,
-    maxItems: Int? = null,
     modifier: Modifier = Modifier
 ) {
-    val displayArrivals = if (maxItems != null) arrivals.take(maxItems) else arrivals
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Freshness status bar
@@ -100,7 +98,7 @@ fun ArrivalsList(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        if (displayArrivals.isEmpty()) {
+        if (arrivals.isEmpty()) {
             if (isLoading) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -149,7 +147,7 @@ fun ArrivalsList(
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                displayArrivals.forEachIndexed { index, arrival ->
+                arrivals.forEachIndexed { index, arrival ->
                     ArrivalRow(arrival = arrival, index = index)
                 }
             }
