@@ -1,50 +1,134 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+==================
+Version change: (unratified scaffold) → 1.0.0
+Bump type: MAJOR (initial ratification — first versioned adoption of the constitution)
+
+Modified principles: n/a (scaffold contained only placeholders)
+  [PRINCIPLE_1_NAME] → I. حریم خصوصی با نبودن (غیرقابل مذاکره)
+  [PRINCIPLE_2_NAME] → II. بدون اینترنت وارد نشه (غیرقابل مذاکره)
+  [PRINCIPLE_3_NAME] → III. فارسی و RTL مقدمه
+  [PRINCIPLE_4_NAME] → IV. نرم بودن الزامه، نه تزئین
+  [PRINCIPLE_5_NAME] → V. حداقل سطح (YAGNI)
+
+Added sections:
+  - هدف برنامه (product intent — scope anchor for future specs)
+  - محدودیت‌های داده و API (was [SECTION_2_NAME])
+  - گردش کار (was [SECTION_3_NAME])
+  - Governance (was [GOVERNANCE_RULES])
+
+Removed sections: none
+
+Follow-up TODOs: none — all placeholders resolved.
+
+NOTE: This report is scratch material for review. Remove before committing.
+-->
+
+# اپ اتوبوس اصفهان — Constitution
+
+## هدف برنامه
+
+اپی برای اندروید که ۳۰۰۲ ایستگاه اتوبوس اصفهان را روی نقشه نشان می‌دهد و به کاربر
+می‌گوید «اتوبوس بعدی کی می‌آید». تنها چیزی که این اپ برایش وجود دارد: آدمی که
+وایستاده سر ایستگاه و می‌خواهد بداند صبر کند یا پیاده برود.
+
+- رابط کاملاً فارسی و RTL است.
+- مدرن و مینیمال — عمداً شبیه وب‌اپ خودِ شهرداری نیست.
+- دارک و لایت مود دارد (فقط رابط نه، نقشه هم).
+- بدون لاگین. بدون اینترنت کار نمی‌کند.
+
+هر فیچر پیشنهادی MUST با این هدف سنجیده شود؛ هر چیزی که خارج از «ایستگاه + زمان
+رسیدن» است، خارج از محدوده است مگر اینکه صراحتاً تأیید شود.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. حریم خصوصی با نبودن (غیرقابل مذاکره)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- نباید لاگین، حساب کاربری، آنالیتیکس، تبلیغات یا ذخیره‌ی داده‌ی شخصی وجود داشته باشد.
+- مجوز موقعیت مکان MUST فقط سمت دستگاه بماند، فقط برای مرتب‌سازی استفاده شود و
+  هرگز آپلود نشود.
+- هرگز «برای بعداً» احراز هویت اضافه نکن.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: تنها کاربر اپ، منتظر ایستگاه است. هر داده‌ی شخصی که جمع شود بدون
+مزیت کاربر، فقط ریسک است.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. بدون اینترنت وارد نشه (غیرقابل مذاکره)
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- حالت آفلاین وجود ندارد.
+- نبود اتصال MUST به یک صفحه‌ی بلاک‌کننده با دکمه‌ی تلاش مجدد بینجامد؛ پس از دو
+  خطای متوالی MUST به همان صفحه برگردد.
+- داده‌ی کهنه هرگز نباید طوری نشان داده شود که انگار زنده است.
+- خطای خام (پیام استثنا، stack trace، متن انگلیسی سرور) هرگز نباید به کاربر نمایش
+  داده شود.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: اپ بدون شبکه بی‌معنی است؛ نمایش داده‌ی کهنه به‌عنوان لحظه‌ای، کاربر را
+سر ایستگاه گمراه می‌کند — بدترین شکل خرابی برای این محصول.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. فارسی و RTL مقدمه
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- هر متنی که کاربر می‌بیند MUST در `res/values-fa/` باشد؛ هاردکد ممنوع.
+- اعداد فارسی MUST با فونت tabular نمایش داده شوند.
+- شناسه‌های فنی (`point_id`, `lineId`, `tripCode`, `busCode`) MUST با `dir=ltr`
+  ایزوله شوند تا دوجهته بودن متن آن‌ها را نشکند.
+- فونت سفارشی بعداً در `res/font/` می‌آید.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: چیدمان RTL شکسته در نمایش کد فنی یا اعداد، مستقیماً اعتماد کاربر به
+زمان اعلام‌شده را از بین می‌برد.
+
+### IV. نرم بودن الزامه، نه تزئین
+
+- تک‌وند MUST به‌عنوان باگ رفتار شود.
+- ایستگاه‌ها MUST با لایه‌ی GPU روی نقشه رندر شوند، نه ۳۰۰۲ تا View.
+- انیمیشن پنجره فقط `transform` را جابه‌جا می‌کند، نه layout را.
+- حداکثر یک درخواست شبکه در هوا؛ حداکثر یک درخواست در هر ۲۰ ثانیه برای هر صفحه.
+
+**Rationale**: کاربر در لحظه‌ی تصمیم (صبر کنم یا بروم) است؛ هر لرزش صفحه او را از
+زمان اعلام‌شده بازمی‌دارد.
+
+### V. حداقل سطح (YAGNI)
+
+- هیچ وابستگی‌ای اضافه نشود مگر واقعاً کاری را حذف کند: نه Google Maps، نه کلید
+  API، نه سرویس‌های گوگل.
+- لیست ایستگاه‌ها MUST داخل خود برنامه باندل شود، از شبکه دانلود نشود.
+- کد حذف‌شده بهتر از کد نوشته‌شده است.
+
+**Rationale**: هر وابستگی، هزینه‌ی نگهداری، حجم و ریسک امنیتی می‌آورد؛ این اپ یک
+مسیر داده‌ی باریک دارد و به چارچوب سنگین نیاز ندارد.
+
+## محدودیت‌های داده و API
+
+- بدون هیچ هدر احراز هویتی؛ فقط `Referer` و `Origin` سایت ارسال شود.
+- دریافت زمان رسیدن: هر ۲۰ ثانیه، فقط برای ایستگاهِ انتخاب‌شده، فقط وقتی پنجره باز
+  است و اپ در پیش‌زمینه است، و هرگز بیش از یک درخواست در هوا. لیست نزدیک‌ها هرگز
+  پول نمی‌شود.
+- آدرس و کد ایستگاه هر ایستگاه فقط یک بار گرفته شود و برای همیشه کش شود.
+- کد ایستگاه فقط از `SearchLocation` می‌آید و داخل رشته‌ی `pname` است.
+- خروجی `SearchLocation` متر است نه درجه — هرگز مستقیم وارد درخواست زمان نمی‌شود.
+- `eta` بدون رقم یعنی سرویس قطع؛ ردیف MUST با آیکون ماه نمایش داده شود و حذف نشود.
+- فیلدهای همیشه‌خالی (`average`, `vote`, `picture`, `media`, `moreInfo`,
+  `currentWorkTime`) اصلاً رندر نشوند.
+- نقشه‌ی تیره: پس از تعویض استایل، همه‌ی لایه‌ها MUST دوباره اضافه شوند.
+
+## گردش کار
+
+- کامیت مستقیم روی `main`، بدون ساختن شاخه.
+- پوش فقط با اجازه‌ی صریح.
+- خروجی build هرگز کامیت نمی‌شود.
+- build MUST بدون هیچ فایل keystore هم بتواند بسازد.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- این منشور نسبت به هر توصیه‌ی دیگری در پروژه اولویت دارد؛ تعارض باید به نفع منشور
+  حل شود.
+- هر پیشنهاد تغییر MUST به‌صورت متمایز (separate commit) مستند و ثبت شود؛ هیچ
+  تغییری در اصول بدون اصلاح صریح همین فایل اعمال نمی‌شود.
+- نسخه‌بندی با معنایی (SemVer):
+  - **MAJOR** — حذف یا بازتعریف ناسازگارِ یک اصل (از جمله اصول «غیرقابل مذاکره»).
+  - **MINOR** — افزودن اصل/بخش جدید یا گسترش مادّی راهنمای آن.
+  - **PATCH** — شفاف‌سازی، ویرایش عبارت، غلط املایی، بدون تغییر معنا.
+- مرور انطباق: هر `/speckit-specify` و `/speckit-analyze` MUST انطباق با اصول
+  «غیرقابل مذاکره» را بررسی کند؛ نقض آن‌ها بدون تأیید صریح کاربر قابل‌قبول نیست.
+- راهنمای رفتار در زمان اجرا در همین فایل است؛ فایل راهنمای جداگانه نسخه‌برداری
+  نمی‌شود مگر اینکه خودِ اصول به آن ارجاع دهند.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-09-27 | **Last Amended**: 2026-09-27
