@@ -1,6 +1,8 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.content.res.Configuration
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +20,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private const val PREFS_NAME = "app_settings"
+private const val KEY_DARK_THEME = "dark_theme"
+
+/**
+ * The stored theme, falling back to the system setting on first launch (when the
+ * key has never been written). Without this the app always opened light.
+ */
+private fun savedTheme(app: Application): Boolean {
+    val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    if (prefs.contains(KEY_DARK_THEME)) return prefs.getBoolean(KEY_DARK_THEME, false)
+    val night = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    return night == Configuration.UI_MODE_NIGHT_YES
+}
 
 enum class SheetPosition {
     COLLAPSED, // 22%
@@ -58,8 +74,9 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BusRepository(application)
     private val networkMonitor = NetworkMonitor(application)
     private val locationHelper = LocationHelper(application)
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _uiState = MutableStateFlow(BusUiState())
+    private val _uiState = MutableStateFlow(BusUiState(isDarkTheme = savedTheme(application)))
     val uiState: StateFlow<BusUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
@@ -286,7 +303,10 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleTheme() {
-        _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme)
+        val next = !_uiState.value.isDarkTheme
+        _uiState.value = _uiState.value.copy(isDarkTheme = next)
+        // Survive process death: the choice is read back on the next launch.
+        prefs.edit().putBoolean(KEY_DARK_THEME, next).apply()
     }
 
     fun setAppResumed(resumed: Boolean) {
