@@ -157,7 +157,9 @@ fun MapLibreContainer(
         // 1. GeoJSON Source with clustering
         val options = GeoJsonOptions()
             .withCluster(true)
-            .withClusterMaxZoom(15)
+            // Individual stop dots only appear one level above this, so 15 meant
+            // zooming from the initial 12 all the way to 15+ before any stop showed.
+            .withClusterMaxZoom(13)
             .withClusterRadius(50)
 
         val source = GeoJsonSource(SOURCE_ID, geoJson, options)
