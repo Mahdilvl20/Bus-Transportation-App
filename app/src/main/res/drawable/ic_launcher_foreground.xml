@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="26"
+        android:translateY="26">
+        <!-- 56x56 dp content inside 108 canvas -->
+        <!-- Bus body -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M8,10 C8,6.68 10.68,4 14,4 L42,4 C45.32,4 48,6.68 48,10 L48,38 C48,40.2 46.2,42 44,42 L44,46 C44,47.1 43.1,48 42,48 L38,48 C36.9,48 36,47.1 36,46 L36,42 L20,42 L20,46 C20,47.1 19.1,48 18,48 L14,48 C12.9,48 12,47.1 12,46 L12,42 L12,42 C9.8,42 8,40.2 8,38 Z" />
+        <!-- Front windshield window cutout -->
+        <path
+            android:fillColor="#1D4ED8"
+            android:pathData="M13,11 C13,9.9 13.9,9 15,9 L41,9 C42.1,9 43,9.9 43,11 L43,23 C43,24.1 42.1,25 41,25 L15,25 C13.9,25 13,24.1 13,23 Z" />
+        <!-- Left Headlight -->
+        <path
+            android:fillColor="#1D4ED8"
+            android:pathData="M14,31 A3.5,3.5 0 1,1 21,31 A3.5,3.5 0 1,1 14,31" />
+        <!-- Right Headlight -->
+        <path
+            android:fillColor="#1D4ED8"
+            android:pathData="M35,31 A3.5,3.5 0 1,1 42,31 A3.5,3.5 0 1,1 35,31" />
+        <!-- Grill plate -->
+        <path
+            android:fillColor="#1D4ED8"
+            android:pathData="M24,32 L32,32 C32.55,32 33,32.45 33,33 C33,33.55 32.55,34 32,34 L24,34 C23.45,34 23,33.55 23,33 C23,32.45 23.45,32 24,32 Z" />
+    </group>
+</vector>

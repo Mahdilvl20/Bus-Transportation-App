@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">اتوبوس اصفهان</string>
+    <string name="internet_gate_title">برای استفاده از برنامه اتصال اینترنت لازم است</string>
+    <string name="offline_desc">لطفاً اتصال اینترنت دستگاه خود را بررسی کنید و مجدداً تلاش نمایید.</string>
+    <string name="retry">تلاش مجدد</string>
+    <string name="checking_connection">در حال بررسی اتصال اینترنت...</string>
+    <string name="location_rationale_text">برای نمایش ایستگاه‌های نزدیک، دسترسی به موقعیت مکان لازم است</string>
+    <string name="grant_location_permission">فعال‌سازی مکان‌یابی</string>
+    <string name="dismiss">بستن</string>
+    <string name="nearby_stops">نزدیک‌ترین ایستگاه‌ها</string>
+    <string name="search_placeholder">جست‌وجوی ایستگاه</string>
+    <string name="no_search_results">ایستگاهی با این مشخصات یافت نشد</string>
+    <string name="bus_station">ایستگاه اتوبوس</string>
+    <string name="station_code_prefix">کد ایستگاه: </string>
+    <string name="no_arrivals">فعلاً سرویسی از این ایستگاه نداریم</string>
+    <string name="service_starts_at">سرویس از %1$s</string>
+    <string name="bus_label">اتوبوس %1$s</string>
+    <string name="updated_ago_seconds">%1$s ثانیه پیش به‌روز شد</string>
+    <string name="updated_just_now">هم‌اکنون به‌روز شد</string>
+    <string name="meter_unit">متر</string>
+    <string name="km_unit">کیلومتر</string>
+    <string name="panorama">نمای ۳۶۰ درجه پانوراما</string>
+    <string name="address_loading">در حال دریافت آدرس...</string>
+    <string name="arrivals_loading">در حال دریافت زمان رسیدن اتوبوس‌ها...</string>
+    <string name="toggle_theme">تغییر پوسته</string>
+    <string name="my_location">موقعیت من</string>
+</resources>

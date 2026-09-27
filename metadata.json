@@ -1,0 +1,6 @@
+{
+  "name": "اتوبوس اصفهان",
+  "description": "نمایش ایستگاه‌های اتوبوس اصفهان روی نقشه و زمان رسیدن اتوبوس بعدی",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+    <!-- Background Circle -->
+    <path
+        android:fillColor="#E0E7FF"
+        android:pathData="M80,80m-68,0a68,68 0,1 1,136 0a68,68 0,1 1,-136 0" />
+    <path
+        android:fillColor="#C7D2FE"
+        android:pathData="M80,80m-52,0a52,52 0,1 1,104 0a52,52 0,1 1,-104 0" />
+    <!-- Bus outline -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M52,65 C52,59 56,55 62,55 L98,55 C104,55 108,59 108,65 L108,100 C108,104 105,107 101,107 L101,113 C101,115 99,117 97,117 L93,117 C91,117 89,115 89,113 L89,107 L71,107 L71,113 C71,115 69,117 67,117 L63,117 C61,117 59,115 59,113 L59,107 C55,107 52,104 52,100 Z" />
+    <!-- Windshield -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,63 C60,61 61.5,60 63,60 L97,60 C98.5,60 100,61 100,63 L100,78 C100,80 98.5,81 97,81 L63,81 C61.5,81 60,80 60,78 Z" />
+    <!-- Bus Lights -->
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M62,94 A4,4 0 1,1 70,94 A4,4 0 1,1 62,94" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M90,94 A4,4 0 1,1 98,94 A4,4 0 1,1 90,94" />
+    <!-- Offline Slash Banner -->
+    <path
+        android:strokeColor="#EF4444"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M38,38 L122,122" />
+    <!-- Wifi off icon in top right badge -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M125,45m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M120,40 L130,50 M130,40 L120,50"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round" />
+</vector>
