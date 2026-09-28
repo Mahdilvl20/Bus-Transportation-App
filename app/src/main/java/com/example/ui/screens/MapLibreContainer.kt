@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalConfiguration
 import com.example.R
 import com.example.model.Stop
 import com.example.ui.viewmodel.SheetPosition
@@ -380,13 +381,18 @@ fun MapLibreContainer(
         }
     }
 
-    // Camera padding when sheet is open (so selected stop is never hidden)
+    // Camera padding when sheet is open (so selected stop is never hidden).
+    // Read in composition because LocalConfiguration is composable-only, and EXPANDED
+    // covers 90% of the screen on every device — a hardcoded 380dp only lined up on one
+    // phone size and left the stop behind the sheet on the others.
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val expandedPaddingPx = with(density) { (screenHeightDp.dp * 0.9f).toPx() }
     LaunchedEffect(sheetPosition) {
         val map = mapInstance ?: return@LaunchedEffect
         val bottomPadding = when (sheetPosition) {
+            SheetPosition.HIDDEN -> 0
             SheetPosition.COLLAPSED -> 0
-            SheetPosition.HALF -> with(density) { 260.dp.toPx() }.toInt()
-            SheetPosition.EXPANDED -> with(density) { 380.dp.toPx() }.toInt()
+            SheetPosition.EXPANDED -> expandedPaddingPx.toInt()
         }
         map.setPadding(0, 0, 0, bottomPadding)
     }

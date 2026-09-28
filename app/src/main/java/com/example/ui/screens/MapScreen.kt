@@ -71,7 +71,7 @@ fun MapScreen(
         }
     }
 
-    // Back button handling: EXPANDED -> HALF -> COLLAPSED -> exit app
+    // Back button handling: EXPANDED -> COLLAPSED -> HIDDEN -> exit app
     BackHandler(enabled = true) {
         val handled = viewModel.handleBackPressed()
         if (!handled) {

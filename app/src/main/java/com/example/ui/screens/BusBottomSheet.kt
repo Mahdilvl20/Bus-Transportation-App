@@ -7,18 +7,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -45,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -67,6 +70,13 @@ import com.example.util.PersianUtils
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+/** The handle strip opens the panel: HIDDEN -> COLLAPSED -> EXPANDED. */
+private fun nextSheetAnchor(position: SheetPosition): SheetPosition = when (position) {
+    SheetPosition.HIDDEN -> SheetPosition.COLLAPSED
+    SheetPosition.COLLAPSED -> SheetPosition.EXPANDED
+    SheetPosition.EXPANDED -> SheetPosition.EXPANDED
+}
+
 @Composable
 fun BusBottomSheet(
     sheetPosition: SheetPosition,
@@ -86,16 +96,25 @@ fun BusBottomSheet(
         val totalHeightPx = with(density) { maxHeight.toPx() }
 
         // Three anchor offsets from top:
-        // COLLAPSED: top is at 78% of screen (height is 22%)
-        // HALF: top is at 45% of screen (height is 55%)
-        // EXPANDED: top is at 10% of screen (height is 90%)
-        val collapsedOffsetPx = totalHeightPx * (1f - 0.22f)
-        val halfOffsetPx = totalHeightPx * (1f - 0.55f)
+        // HIDDEN: only the handle stays on screen, and it must clear the system
+        //         navigation bar as well or it lands under the gesture pill
+        // COLLAPSED: top is at 76% of screen (height is 24%) — nearby list preview
+        // EXPANDED: top is at 10% of screen (height is 90%) — full screen, scrolls
+        val navBarPx = with(density) {
+            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx()
+        }
+        // 16dp padding + 4.5dp line + 16dp padding, plus a clearance so the handle is
+        // not inside the system navigation bar's touch strip (it was 30dp from the
+        // bottom and taps fell through to the gesture bar).
+        val handlePx = with(density) { 36.5f.dp.toPx() }
+        val clearancePx = with(density) { 16f.dp.toPx() }
+        val hiddenOffsetPx = totalHeightPx - (handlePx + navBarPx + clearancePx)
+        val collapsedOffsetPx = totalHeightPx * (1f - 0.24f)
         val expandedOffsetPx = totalHeightPx * (1f - 0.90f)
 
         val targetOffsetPx = when (sheetPosition) {
+            SheetPosition.HIDDEN -> hiddenOffsetPx
             SheetPosition.COLLAPSED -> collapsedOffsetPx
-            SheetPosition.HALF -> halfOffsetPx
             SheetPosition.EXPANDED -> expandedOffsetPx
         }
 
@@ -119,31 +138,67 @@ fun BusBottomSheet(
             shadowElevation = 16.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(maxHeight)
-                // Hardware layer translationY for smooth 60fps performance without per-frame relayout
-                .graphicsLayer {
-                    translationY = animOffsetY.value
-                }
+                // Bottom-anchored with height = the visible band, not the whole screen.
+                // The old graphicsLayer translationY kept the sheet full-height and merely
+                // slid it down, so at COLLAPSED the LazyColumn measured a viewport reaching
+                // to 178% of the screen: every item fit without scrolling and the lower rows
+                // simply landed below the display. Height must track the anchor instead.
+                .align(Alignment.BottomCenter)
+                .height(((totalHeightPx - animOffsetY.value) / density.density).dp)
                 .pointerInput(totalHeightPx) {
+                    // This Compose version passes no velocity to onDragEnd, so measure it
+                    // here: smoothed dragAmount per second. A finger resting for a moment
+                    // must not count as a flick, so it decays if the last move was recent.
+                    var velocity = 0f
+                    var lastNanos = 0L
+
                     detectVerticalDragGestures(
                         onDragEnd = {
                             val currentY = animOffsetY.value
-                            // Snap to closest anchor
-                            val distCollapsed = kotlin.math.abs(currentY - collapsedOffsetPx)
-                            val distHalf = kotlin.math.abs(currentY - halfOffsetPx)
-                            val distExpanded = kotlin.math.abs(currentY - expandedOffsetPx)
+                            val anchors = listOf(
+                                SheetPosition.HIDDEN to hiddenOffsetPx,
+                                SheetPosition.COLLAPSED to collapsedOffsetPx,
+                                SheetPosition.EXPANDED to expandedOffsetPx,
+                            )
+                            // A flick carries the sheet to the next anchor even when it
+                            // travelled less than half the gap — otherwise a swipe up from
+                            // COLLAPSED (68% of the screen away from EXPANDED) always
+                            // snapped straight back and the sheet never fully opened.
+                            val settled = System.nanoTime() - lastNanos > 150_000_000L
+                            val speed = if (settled) 0f else velocity
+                            val next = if (kotlin.math.abs(speed) > 800f) {
+                                if (speed > 0f) {
+                                    // finger moving down -> larger offset (towards HIDDEN)
+                                    anchors.filter { it.second > currentY + 1f }
+                                        .minByOrNull { it.second }
+                                } else {
+                                    anchors.filter { it.second < currentY - 1f }
+                                        .maxByOrNull { it.second }
+                                }
+                            } else null
 
-                            val closest = when {
-                                distExpanded < distHalf && distExpanded < distCollapsed -> SheetPosition.EXPANDED
-                                distHalf < distCollapsed -> SheetPosition.HALF
-                                else -> SheetPosition.COLLAPSED
-                            }
-                            onPositionChange(closest)
+                            val closest = next ?: anchors
+                                .minByOrNull { kotlin.math.abs(currentY - it.second) }!!
+                            onPositionChange(closest.first)
+                            velocity = 0f
+                            lastNanos = 0L
+                        },
+                        onDragCancel = {
+                            velocity = 0f
+                            lastNanos = 0L
                         },
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
+                            val now = System.nanoTime()
+                            if (lastNanos != 0L) {
+                                val dt = (now - lastNanos) / 1_000_000_000f
+                                if (dt > 0f) {
+                                    velocity = velocity * 0.6f + (dragAmount / dt) * 0.4f
+                                }
+                            }
+                            lastNanos = now
                             val newY = (animOffsetY.value + dragAmount)
-                                .coerceIn(expandedOffsetPx - 40f, collapsedOffsetPx + 40f)
+                                .coerceIn(expandedOffsetPx - 40f, hiddenOffsetPx)
                             scope.launch { animOffsetY.snapTo(newY) }
                         }
                     )
@@ -153,13 +208,20 @@ fun BusBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Inset the CONTENT, not the sheet: padding on the Surface itself
+                    // shrank the background too, leaving the map visible as a black strip
+                    // below the panel.
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 16.dp)
             ) {
-                // Drag Handle
+                // Drag Handle. The whole strip is tappable: a bare line this close to
+                // the system navigation bar looked pressable but did nothing, so taps
+                // landed on the gesture bar instead.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 10.dp),
+                        .clickable { onPositionChange(nextSheetAnchor(sheetPosition)) }
+                        .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
@@ -172,6 +234,10 @@ fun BusBottomSheet(
                     )
                 }
 
+                // Fully closed shows the handle only: the extra clearance needed to keep
+                // that handle out of the system navigation bar's touch strip would
+                // otherwise leave the top of the title text peeking out above the bar.
+                if (sheetPosition != SheetPosition.HIDDEN) {
                 // If no stop selected or collapsed: Show "Nearby Stops" list
                 if (selectedStop == null || sheetPosition == SheetPosition.COLLAPSED) {
                     Text(
@@ -241,6 +307,7 @@ fun BusBottomSheet(
                         }
                     }
                 }
+                } // end HIDDEN guard
             }
         }
     }

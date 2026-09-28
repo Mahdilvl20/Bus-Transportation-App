@@ -36,9 +36,12 @@ private fun savedTheme(app: Application): Boolean {
 }
 
 enum class SheetPosition {
-    COLLAPSED, // 22%
-    HALF,      // 55%
-    EXPANDED   // 90%
+    HIDDEN,    // only the drag handle peeks above the bottom edge
+    COLLAPSED, // 22% — the nearby list preview
+    EXPANDED;  // 90% — full screen, where long lists actually scroll
+
+    /** True while the sheet actually shows content — this is what gates polling. */
+    val isOpen: Boolean get() = this != HIDDEN && this != COLLAPSED
 }
 
 data class BusUiState(
@@ -229,7 +232,7 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     fun selectStop(stop: Stop, fromUserAction: Boolean = true) {
         _uiState.value = _uiState.value.copy(
             selectedStop = stop,
-            sheetPosition = if (fromUserAction) SheetPosition.HALF else _uiState.value.sheetPosition,
+            sheetPosition = if (fromUserAction) SheetPosition.EXPANDED else _uiState.value.sheetPosition,
             isSearchActive = false,
             searchQuery = "",
             searchResults = emptyList(),
@@ -270,8 +273,17 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     fun setSheetPosition(position: SheetPosition) {
         _uiState.value = _uiState.value.copy(sheetPosition = position)
         val selected = _uiState.value.selectedStop
-        if (position == SheetPosition.COLLAPSED) {
+        if (!position.isOpen) {
             stopArrivalsPolling()
+            // Collapsing means "back to browsing nearby". The stop has to go with it:
+            // while it was kept, the next drag upward re-opened the previous stop's
+            // arrivals instead of the nearby list.
+            _uiState.value = _uiState.value.copy(
+                selectedStop = null,
+                selectedStopDetail = null,
+                arrivals = emptyList(),
+                arrivalsError = false
+            )
         } else if (selected != null) {
             restartArrivalsPolling(selected)
         }
@@ -279,15 +291,11 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Back navigation handling inside sheet:
-     * EXPANDED -> HALF -> COLLAPSED -> returns false (can exit app)
+     * EXPANDED -> COLLAPSED -> HIDDEN -> returns false (can exit app)
      */
     fun handleBackPressed(): Boolean {
         return when (_uiState.value.sheetPosition) {
             SheetPosition.EXPANDED -> {
-                setSheetPosition(SheetPosition.HALF)
-                true
-            }
-            SheetPosition.HALF -> {
                 setSheetPosition(SheetPosition.COLLAPSED)
                 true
             }
@@ -296,9 +304,13 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
                     closeSearch()
                     true
                 } else {
-                    false
+                    // one more level before leaving the app: fully close the sheet
+                    setSheetPosition(SheetPosition.HIDDEN)
+                    true
                 }
             }
+            // already fully closed — let the system handle back (exit the app)
+            SheetPosition.HIDDEN -> false
         }
     }
 
@@ -312,7 +324,7 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     fun setAppResumed(resumed: Boolean) {
         isAppResumed = resumed
         val selected = _uiState.value.selectedStop
-        if (resumed && _uiState.value.sheetPosition != SheetPosition.COLLAPSED && selected != null) {
+        if (resumed && _uiState.value.sheetPosition.isOpen && selected != null) {
             restartArrivalsPolling(selected)
         } else {
             stopArrivalsPolling()
@@ -344,9 +356,9 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     private fun restartArrivalsPolling(stop: Stop) {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
-            while (isActive && isAppResumed && _uiState.value.sheetPosition != SheetPosition.COLLAPSED) {
+            while (isActive && isAppResumed && _uiState.value.sheetPosition.isOpen) {
                 delay(20_000) // 20 seconds polling
-                if (!isActive || !isAppResumed || _uiState.value.sheetPosition == SheetPosition.COLLAPSED) break
+                if (!isActive || !isAppResumed || !_uiState.value.sheetPosition.isOpen) break
 
                 val result = repository.getArrivals(stop)
                 result.onSuccess { arrivals ->
