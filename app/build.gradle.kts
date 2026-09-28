@@ -8,6 +8,17 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+// Release signing comes only from the environment, so local builds are untouched:
+// with no KEYSTORE_PATH, assembleRelease keeps producing an unsigned APK exactly as
+// it does today. The release workflow sets all four values from GitHub Secrets.
+val releaseKeystorePath: String? = System.getenv("KEYSTORE_PATH")
+
+// ABI splits are opt-in (-PabiSplits) so the default assembleRelease still yields the
+// single normal APK. The module ships 12 native libraries across 4 ABIs in a 66MB
+// universal APK, so per-architecture builds are worth offering — just not by default.
+val abiSplitsEnabled: Boolean = project.hasProperty("abiSplits")
+
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -22,15 +33,36 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // Signing configs removed while testing: no keystore exists in this repo, so both
-  // configs pointed at missing files and every build failed looking for one.
-  // Debug now uses the default ~/.android/debug.keystore (AGP creates it);
-  // release builds produce an unsigned APK. Re-add a real keystore before shipping.
+  signingConfigs {
+    if (releaseKeystorePath != null) {
+      create("release") {
+        storeFile = project.file(releaseKeystorePath)
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS")
+        keyPassword = System.getenv("KEY_PASSWORD")
+      }
+    }
+  }
+
+  if (abiSplitsEnabled) {
+    splits {
+      abi {
+        isEnable = true
+        isUniversalApk = true
+        reset()
+        include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+      }
+    }
+  }
+
   buildTypes {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      if (releaseKeystorePath != null) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
   }
   compileOptions {
@@ -47,6 +79,41 @@ android {
     includeInBundle = true
   }
 }
+
+// Predictable release APK names. AGP 9's new DSL (android.newDsl=true, the default)
+// no longer exposes applicationVariants or outputFileName — VariantOutput only offers
+// version overrides — so the APKs are renamed by a task instead of by the DSL.
+// Debug output is untouched, so local development builds are unaffected.
+// Every value the action needs is a local of the configuration block: holding a
+// reference to the build script itself breaks the configuration cache.
+val renameReleaseApks = tasks.register("renameReleaseApks") {
+  group = "build"
+  description = "Renames release APKs to IsfahanBus-<abi>-release.apk"
+  val outputDir = layout.buildDirectory.dir("outputs/apk/release")
+  val splitsOn = project.hasProperty("abiSplits")
+  val base = "IsfahanBus"
+  doLast {
+    val dir = outputDir.get().asFile
+    val abis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+    dir.listFiles { f -> f.isFile && f.extension == "apk" }?.forEach { apk ->
+      // Skip files this task already renamed: otherwise a leftover plain release APK
+      // from an earlier non-split build would overwrite the universal one below.
+      if (apk.name.startsWith("$base-")) return@forEach
+      val abi = abis.firstOrNull { apk.name.contains(it) }
+      val target = when {
+        abi != null -> "$base-$abi-release.apk"
+        splitsOn -> "$base-universal-release.apk"
+        else -> "$base-release.apk"
+      }
+      if (apk.name != target) {
+        apk.copyTo(dir.resolve(target), overwrite = true)
+        apk.delete()
+      }
+    }
+  }
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(renameReleaseApks) }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
