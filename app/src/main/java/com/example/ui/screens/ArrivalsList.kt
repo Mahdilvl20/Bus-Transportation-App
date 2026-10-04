@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.ArrivalItem
 import com.example.ui.theme.ErrorRed
+import com.example.ui.viewmodel.POLL_INTERVAL_SECONDS
 import com.example.util.EtaDisplay
 import com.example.util.PersianUtils
 
@@ -60,12 +61,16 @@ fun ArrivalsList(
                 .padding(horizontal = 4.dp, vertical = 6.dp)
         ) {
             val statusColor = if (hasError) ErrorRed else MaterialTheme.colorScheme.onSurfaceVariant
+            // A countdown to the next refresh instead of a climbing age: the age kept
+            // growing whenever polling was paused, so the number was unpredictable.
+            val secondsUntilRefresh = (POLL_INTERVAL_SECONDS - secondsSinceUpdate)
+                .coerceIn(0, POLL_INTERVAL_SECONDS)
             val freshnessText = if (secondsSinceUpdate < 5) {
                 stringResource(id = R.string.updated_just_now)
             } else {
                 stringResource(
-                    id = R.string.updated_ago_seconds,
-                    PersianUtils.toPersianDigits(secondsSinceUpdate)
+                    id = R.string.next_update_seconds,
+                    PersianUtils.toPersianDigits(secondsUntilRefresh)
                 )
             }
 

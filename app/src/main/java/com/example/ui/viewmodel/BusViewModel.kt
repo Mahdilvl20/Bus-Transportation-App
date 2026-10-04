@@ -35,6 +35,9 @@ private fun savedTheme(app: Application): Boolean {
     return night == Configuration.UI_MODE_NIGHT_YES
 }
 
+/** Seconds between arrivals refreshes — also drives the countdown shown to the user. */
+const val POLL_INTERVAL_SECONDS = 20
+
 enum class SheetPosition {
     HIDDEN,    // only the drag handle peeks above the bottom edge
     COLLAPSED, // 22% — the nearby list preview
@@ -63,6 +66,9 @@ data class BusUiState(
     val showLocationRationale: Boolean = false,
     val hasLocationPermission: Boolean = false,
     val userLocation: Location? = null,
+    /** Stop sitting under the fixed map pin, if any — drives the hint card. */
+    val centerStop: Stop? = null,
+    val centerStopDistance: Double? = null,
     val cameraCenter: Pair<Double, Double> = 32.6480 to 51.6673, // Isfahan center: lat, lng
     val isDarkTheme: Boolean = false,
     val notice: NoticeResponse? = null,
@@ -83,7 +89,6 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<BusUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
-    private var freshnessTimerJob: Job? = null
     private var consecutiveNetworkFailures = 0
     private var hasMadeFirstSuccessfulCall = false
     private var isAppResumed = true
@@ -114,7 +119,6 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Start freshness counter
-        startFreshnessTimer()
     }
 
     fun retryConnection() {
@@ -191,6 +195,21 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
         if (!_uiState.value.hasLocationPermission || _uiState.value.userLocation == null) {
             updateNearbyStops(lat, lng)
         }
+    }
+
+    /**
+     * Which stop sits under the fixed centre pin after the camera settles. Reported as
+     * an id so the map never has to know about Stop instances, and kept out of the
+     * selection path on purpose — the hint card is only a preview.
+     */
+    fun onCenterStopChanged(id: Long?) {
+        val stop = id?.let { getStopById(it) }
+        _uiState.value = _uiState.value.copy(
+            centerStop = stop,
+            centerStopDistance = stop?.let { s ->
+                _uiState.value.userLocation?.let { s.distanceTo(it.latitude, it.longitude) }
+            }
+        )
     }
 
     fun refreshLocationAndNearby() {
@@ -355,10 +374,20 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restartArrivalsPolling(stop: Stop) {
         pollingJob?.cancel()
+        // Reset here and tick inside the loop below. The old free-running freshness timer
+        // kept counting while polling was paused (collapsed sheet, app in the background),
+        // which is how the label reached 50s and 100s instead of staying inside 0-20s.
+        _uiState.value = _uiState.value.copy(secondsSinceUpdate = 0)
         pollingJob = viewModelScope.launch {
             while (isActive && isAppResumed && _uiState.value.sheetPosition.isOpen) {
-                delay(20_000) // 20 seconds polling
-                if (!isActive || !isAppResumed || !_uiState.value.sheetPosition.isOpen) break
+                for (second in 1..POLL_INTERVAL_SECONDS) {
+                    delay(1000)
+                    if (!isActive || !isAppResumed || !_uiState.value.sheetPosition.isOpen) {
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(secondsSinceUpdate = second)
+                }
+                if (!isAppResumed || !_uiState.value.sheetPosition.isOpen) return@launch
 
                 val result = repository.getArrivals(stop)
                 result.onSuccess { arrivals ->
@@ -381,18 +410,6 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
         pollingJob = null
     }
 
-    private fun startFreshnessTimer() {
-        freshnessTimerJob?.cancel()
-        freshnessTimerJob = viewModelScope.launch {
-            while (isActive) {
-                delay(1000)
-                _uiState.value = _uiState.value.copy(
-                    secondsSinceUpdate = _uiState.value.secondsSinceUpdate + 1
-                )
-            }
-        }
-    }
-
     fun getGeoJsonData(): String {
         return repository.buildGeoJson(
             selectedStopId = _uiState.value.selectedStop?.id,
@@ -403,6 +420,5 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         pollingJob?.cancel()
-        freshnessTimerJob?.cancel()
     }
 }

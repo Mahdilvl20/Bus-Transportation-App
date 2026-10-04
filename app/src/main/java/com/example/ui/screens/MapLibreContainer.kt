@@ -5,14 +5,19 @@ import android.graphics.Color
 import android.graphics.PointF
 import android.graphics.RectF
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,7 +60,9 @@ import org.maplibre.android.style.expressions.Expression.step
 import org.maplibre.android.style.expressions.Expression.stop
 import org.maplibre.android.style.expressions.Expression.toString
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.circleOpacity
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
@@ -82,6 +89,23 @@ private const val STYLE_DARK = "https://tiles.openfreemap.org/styles/dark"
 private const val STYLE_LIGHT_FALLBACK = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
 private const val STYLE_DARK_FALLBACK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
 
+/**
+ * Road fill colours for the dark style, whose interiors sit at #181818..#000 on a
+ * #0C0C0C background and are unreadable above z6. Casing stays lighter than the
+ * inner fill so the layering the style relies on still reads.
+ */
+private val DARK_ROAD_COLORS = mapOf(
+    "road_pier" to "#2b2b2b",
+    "highway_path" to "#3f3f41",
+    "highway_minor" to "#343436",
+    "highway_major_subtle" to "#2f2f31",
+    "highway_major_inner" to "#3c3c3f",
+    "highway_major_casing" to "#5a5a5e",
+    "highway_motorway_inner" to "#4a4a4e",
+    "highway_motorway_casing" to "#5f5f64",
+    "highway_motorway_subtle" to "#2f2f31",
+)
+
 /** How long to wait for one style before trying the next. */
 private const val STYLE_TIMEOUT_MS = 8_000L
 
@@ -95,6 +119,7 @@ fun MapLibreContainer(
     sheetPosition: SheetPosition,
     onStopClicked: (Long) -> Unit,
     onCameraCenterChanged: (Double, Double) -> Unit,
+    onCenterStopChanged: (Long?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -128,16 +153,34 @@ fun MapLibreContainer(
                 // Idle, not move: the move listener fired ~60x/second while panning,
                 // and each call wrote to UiState (recomposing the whole screen) and
                 // re-sorted all 3,002 stops when GPS permission was missing.
+                // 24px tolerance box, shared by tapping and by the centre pin so a stop
+                // can be aimed at as well as tapped.
+                val tolerancePx = with(density) { 24.dp.toPx() }
+                val queryBox = RectF()
+
                 map.addOnCameraIdleListener {
                     val target = map.cameraPosition.target
                     if (target != null) {
                         onCameraCenterChanged(target.latitude, target.longitude)
+
+                        // What sits under the fixed pin? A cluster is not a stop, so at low
+                        // zoom nothing is reported and the hint card stays hidden.
+                        val screenPoint = map.projection.toScreenLocation(target)
+                        queryBox.set(
+                            screenPoint.x - tolerancePx,
+                            screenPoint.y - tolerancePx,
+                            screenPoint.x + tolerancePx,
+                            screenPoint.y + tolerancePx
+                        )
+                        val clustered = map.queryRenderedFeatures(queryBox, LAYER_CLUSTER_CIRCLE)
+                        val hits: List<org.maplibre.geojson.Feature> = if (clustered.isEmpty()) {
+                            map.queryRenderedFeatures(queryBox, LAYER_STOP_CIRCLE, LAYER_STOP_HALO)
+                        } else {
+                            emptyList()
+                        }
+                        onCenterStopChanged(hits.firstOrNull()?.getNumberProperty("id")?.toLong())
                     }
                 }
-
-                // 24px tolerance box for tapping
-                val tolerancePx = with(density) { 24.dp.toPx() }
-                val queryBox = RectF()
 
                 map.addOnMapClickListener { point ->
                     val screenPoint = map.projection.toScreenLocation(point)
@@ -302,6 +345,16 @@ fun MapLibreContainer(
                 }
             }
         }
+        // The dark style draws road interiors at #181818 / hsl(0,0%,7%) and motorways at
+        // #000 above z6 — all on a #0C0C0C background, so at the zooms this app uses only
+        // the casings were visible. Lift the fills while keeping the casing/inner pairing
+        // that carries the hierarchy, so motorways still outrank major roads.
+        if (isDarkTheme) {
+            DARK_ROAD_COLORS.forEach { (layerId, color) ->
+                style.getLayerAs<LineLayer>(layerId)?.setProperties(lineColor(Color.parseColor(color)))
+            }
+        }
+
         styleReady = true
     }
 
@@ -408,12 +461,25 @@ fun MapLibreContainer(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("maplibre_view")
+        )
+
+        // Fixed aim point. MapLibre centres the camera inside the same bottom-padded
+        // region it gets for the sheet, so the pin stays exactly where the camera looks.
+        Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = maxHeight * (1f - if (sheetPosition == SheetPosition.EXPANDED) 0.9f else 0f) / 2f - 22.dp)
+                .size(44.dp)
+                .testTag("map_centre_pin")
         )
 
         // A visible failure beats a black screen: the user can retry instead of guessing.

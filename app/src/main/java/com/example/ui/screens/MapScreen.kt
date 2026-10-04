@@ -101,7 +101,8 @@ fun MapScreen(
             },
             onCameraCenterChanged = { lat, lng ->
                 viewModel.updateCameraCenter(lat, lng)
-            }
+            },
+            onCenterStopChanged = { id -> viewModel.onCenterStopChanged(id) }
         )
 
         // 2. Top Floating Controls: Search Bar, Notice, Location Rationale
@@ -249,6 +250,8 @@ fun MapScreen(
             arrivalsError = uiState.arrivalsError,
             secondsSinceUpdate = uiState.secondsSinceUpdate,
             nearbyStops = uiState.nearbyStops,
+            centerStop = uiState.centerStop,
+            centerStopDistance = uiState.centerStopDistance,
             onSelectStop = { stop -> viewModel.selectStop(stop, fromUserAction = true) }
         )
     }

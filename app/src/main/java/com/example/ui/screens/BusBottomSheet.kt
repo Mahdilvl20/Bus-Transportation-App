@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
@@ -40,6 +41,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -88,6 +91,8 @@ fun BusBottomSheet(
     arrivalsError: Boolean,
     secondsSinceUpdate: Int,
     nearbyStops: List<Pair<Stop, Double>>,
+    centerStop: Stop?,
+    centerStopDistance: Double?,
     onSelectStop: (Stop) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -124,9 +129,11 @@ fun BusBottomSheet(
         LaunchedEffect(targetOffsetPx) {
             animOffsetY.animateTo(
                 targetValue = targetOffsetPx,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
+                // A plain eased slide instead of the medium-bouncy spring: the panel used
+                // to overshoot on every snap, which is uncomfortable to watch.
+                animationSpec = tween(
+                    durationMillis = 320,
+                    easing = FastOutSlowInEasing
                 )
             )
         }
@@ -238,6 +245,50 @@ fun BusBottomSheet(
                 // that handle out of the system navigation bar's touch strip would
                 // otherwise leave the top of the title text peeking out above the bar.
                 if (sheetPosition != SheetPosition.HIDDEN) {
+                // Aim hint: whatever sits under the fixed centre pin. Only while browsing —
+                // once a stop is open it would simply repeat itself. This is what makes
+                // picking a stop possible when several sit on top of each other.
+                if (centerStop != null && selectedStop == null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectStop(centerStop) }
+                            .padding(top = 4.dp, bottom = 6.dp)
+                            .testTag("centre_stop_hint"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = centerStop.name,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            centerStopDistance?.let { meters ->
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = PersianUtils.formatDistance(meters),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 // If no stop selected or collapsed: Show "Nearby Stops" list
                 if (selectedStop == null || sheetPosition == SheetPosition.COLLAPSED) {
                     Text(
