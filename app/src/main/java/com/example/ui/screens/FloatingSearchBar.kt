@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -60,6 +61,8 @@ fun FloatingSearchBar(
     onClearSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -180,7 +183,12 @@ fun FloatingSearchBar(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onStopSelected(stop) }
+                                    .clickable {
+                                        // Otherwise the IME stays up and covers the
+                                        // results the user just tapped.
+                                        keyboardController?.hide()
+                                        onStopSelected(stop)
+                                    }
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
                                     .testTag("search_result_item_${stop.id}")
                             ) {
