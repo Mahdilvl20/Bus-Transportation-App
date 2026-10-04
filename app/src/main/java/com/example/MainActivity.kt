@@ -4,7 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 import androidx.activity.viewModels
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -29,6 +32,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val uiState by viewModel.uiState.collectAsState()
+
+            // The theme toggle is app-local, so it diverges from the system setting the
+            // edge-to-edge API sampled at startup. Force icon contrast to follow the app.
+            val barController = remember { WindowCompat.getInsetsController(window, window.decorView) }
+            SideEffect {
+                barController.isAppearanceLightStatusBars = !uiState.isDarkTheme
+                barController.isAppearanceLightNavigationBars = !uiState.isDarkTheme
+            }
 
             IsfahanBusTheme(darkTheme = uiState.isDarkTheme) {
                 // Ensure complete app uses RTL Persian layout
