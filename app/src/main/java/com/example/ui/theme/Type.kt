@@ -4,16 +4,22 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.unit.sp
+import com.example.R
 
-// =========================================================================
-// CUSTOM FONT SWAP POINT:
-// To add a custom Persian font (.ttf) later:
-// 1. Place your font file under res/font/ (e.g. res/font/vazirmatn.ttf)
-// 2. Uncomment and point AppFontFamily to it:
-//    val AppFontFamily = FontFamily(Font(R.font.vazirmatn))
-// =========================================================================
-val AppFontFamily: FontFamily = FontFamily.SansSerif
+/**
+ * Vazir 16.1.0 (rastikerdar), three weights — that is every weight this app asks for:
+ * SemiBold (600) and ExtraBold (800) resolve to the nearest of the three, Bold.
+ * The "Without Latin" cuts shipped in the same release were dropped on purpose: they
+ * carry no Latin glyphs, so technical ids (`busCode`, `point_id`) would have silently
+ * fallen back to Roboto in the middle of a line.
+ */
+val AppFontFamily: FontFamily = FontFamily(
+    Font(R.font.vazir, FontWeight.Normal),
+    Font(R.font.vazir_medium, FontWeight.Medium),
+    Font(R.font.vazir_bold, FontWeight.Bold)
+)
 
 val AppTypography = Typography(
     displayLarge = TextStyle(
