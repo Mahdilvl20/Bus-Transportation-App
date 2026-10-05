@@ -17,9 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.InternetGateScreen
 import com.example.ui.screens.MapScreen
 import com.example.ui.theme.IsfahanBusTheme
+import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.BusViewModel
 
 class MainActivity : ComponentActivity() {
@@ -56,8 +58,16 @@ class MainActivity : ComponentActivity() {
                                     onRetry = { viewModel.retryConnection() }
                                 )
                             } else {
-                                // Main Map experience
-                                MapScreen(viewModel = viewModel)
+                                // Favorites is the landing screen; the map is entered from it.
+                                Crossfade(
+                                    targetState = uiState.appScreen,
+                                    label = "top_level_screen_crossfade"
+                                ) { screen ->
+                                    when (screen) {
+                                        AppScreen.FAVORITES -> FavoritesScreen(viewModel = viewModel)
+                                        AppScreen.MAP -> MapScreen(viewModel = viewModel)
+                                    }
+                                }
                             }
                         }
                     }

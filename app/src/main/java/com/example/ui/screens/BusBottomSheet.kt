@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -93,7 +96,9 @@ fun BusBottomSheet(
     nearbyStops: List<Pair<Stop, Double>>,
     centerStop: Stop?,
     centerStopDistance: Double?,
+    selectedStopIsFavorite: Boolean,
     onSelectStop: (Stop) -> Unit,
+    onToggleFavorite: (Stop) -> Unit,
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -325,7 +330,9 @@ fun BusBottomSheet(
                     StopDetailHeader(
                         stop = selectedStop,
                         detail = stopDetail,
-                        isExpanded = sheetPosition == SheetPosition.EXPANDED
+                        isExpanded = sheetPosition == SheetPosition.EXPANDED,
+                        isFavorite = selectedStopIsFavorite,
+                        onToggleFavorite = onToggleFavorite
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -368,7 +375,9 @@ fun BusBottomSheet(
 fun StopDetailHeader(
     stop: Stop,
     detail: CachedStopDetail?,
-    isExpanded: Boolean
+    isExpanded: Boolean,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (Stop) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -442,6 +451,42 @@ fun StopDetailHeader(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("stop_address")
             )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Toggling is local only: no request is made to favorite a stop.
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color.Transparent,
+            border = BorderStroke(1.6.dp, MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleFavorite(stop) }
+                .testTag("toggle_favorite_button")
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 13.dp)
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(19.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(
+                        id = if (isFavorite) R.string.in_favorites else R.string.add_to_favorites
+                    ),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

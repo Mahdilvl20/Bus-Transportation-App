@@ -285,6 +285,17 @@ fun ArrivalRow(
                     }
                 }
 
+                is EtaDisplay.Arriving -> {
+                    Text(
+                        text = stringResource(id = R.string.arriving_now),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        ),
+                        color = Color(0xFF16A34A)
+                    )
+                }
+
                 is EtaDisplay.OutOfService -> {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

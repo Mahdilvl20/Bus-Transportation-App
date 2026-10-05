@@ -27,4 +27,20 @@
     <string name="map_load_failed">نقشه بارگذاری نشد</string>
     <string name="map_load_failed_desc">ارتباط با سرور نقشه برقرار نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.</string>
     <string name="next_update_seconds">%1$s ثانیه دیگر به‌روز می‌شود</string>
+    <!-- Favorites screen -->
+    <string name="favorites_title">علاقه‌مندی‌ها</string>
+    <string name="favorites_count">%1$s ایستگاه ذخیره‌شده</string>
+    <string name="favorites_empty_title">هنوز ایستگاهی ذخیره نکرده‌ای</string>
+    <string name="favorites_empty_body_1">روی ستاره‌ی ایستگاه بزن تا اینجا ذخیره شود</string>
+    <string name="favorites_empty_body_2">و هربار بدون گشتن روی نقشه، سریع به آن برسی.</string>
+    <string name="favorites_hint">برای افزودن ایستگاه، از نقشه وارد شو و ستاره بزن.</string>
+    <string name="open_map">نقشه</string>
+    <string name="add_to_favorites">افزودن به علاقه‌مندی‌ها</string>
+    <string name="in_favorites">در علاقه‌مندی‌ها</string>
+    <string name="rename_stop">تغییر نام ایستگاه</string>
+    <string name="save">ذخیره</string>
+    <string name="cancel">انصراف</string>
+    <string name="rename_too_long">نام نباید بیشتر از ۲۴ حرف باشد</string>
+    <string name="rename_blank">نام را خالی نگذار</string>
+    <string name="arriving_now">درحال ورود</string>
 </resources>

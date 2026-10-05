@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.BusViewModel
 import com.example.ui.viewmodel.SheetPosition
 
@@ -75,8 +76,8 @@ fun MapScreen(
     BackHandler(enabled = true) {
         val handled = viewModel.handleBackPressed()
         if (!handled) {
-            // Exit app
-            android.os.Process.killProcess(android.os.Process.myPid())
+            // Nothing left to collapse: back from the map goes to the home grid.
+            viewModel.setAppScreen(AppScreen.FAVORITES)
         }
     }
 
@@ -252,7 +253,9 @@ fun MapScreen(
             nearbyStops = uiState.nearbyStops,
             centerStop = uiState.centerStop,
             centerStopDistance = uiState.centerStopDistance,
-            onSelectStop = { stop -> viewModel.selectStop(stop, fromUserAction = true) }
+            selectedStopIsFavorite = uiState.selectedStop?.let { viewModel.isFavorite(it) } ?: false,
+            onSelectStop = { stop -> viewModel.selectStop(stop, fromUserAction = true) },
+            onToggleFavorite = { stop -> viewModel.toggleFavorite(stop) }
         )
     }
 }

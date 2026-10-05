@@ -7,6 +7,10 @@ import kotlin.math.abs
 sealed class EtaDisplay {
     data class Active(val minutes: String, val rawText: String) : EtaDisplay()
     data class OutOfService(val serviceStartTime: String) : EtaDisplay()
+
+    /** The bus is at (or one minute from) the stop: no number, only the words. */
+    object Arriving : EtaDisplay()
+
     object None : EtaDisplay()
 }
 
@@ -102,7 +106,9 @@ object PersianUtils {
         val match = digitRegex.find(rawEta)
         return if (match != null) {
             val minutes = match.value
-            EtaDisplay.Active(minutes = toPersianDigits(minutes), rawText = rawEta)
+            // Zero minutes is not a number the user can act on — it is "now arriving".
+            if (minutes.toIntOrNull() == 0) EtaDisplay.Arriving
+            else EtaDisplay.Active(minutes = toPersianDigits(minutes), rawText = rawEta)
         } else {
             EtaDisplay.OutOfService(toPersianDigits("06:00"))
         }

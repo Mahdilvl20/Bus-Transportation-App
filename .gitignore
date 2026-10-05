@@ -19,3 +19,5 @@ debug.keystore
 
 # Rebuildable build output (APK) — keep the repo light
 app/debug/
+
+view1

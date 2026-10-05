@@ -60,6 +60,13 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `zero minute eta reads as arriving`() {
+    assertTrue(PersianUtils.parseEta("0 دقیقه") is EtaDisplay.Arriving)
+    assertTrue(PersianUtils.parseEta("0.5 دقیقه") is EtaDisplay.Arriving)
+    assertTrue(PersianUtils.parseEta("7 دقیقه") is EtaDisplay.Active)
+  }
+
+  @Test
   fun `test station code extraction`() {
     val pname = "مسجدالمهدی - کد ایستگاه : 2229"
     val code = PersianUtils.extractStationCode(pname)

@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.FavoritesStore
 import com.example.data.repository.BusRepository
 import com.example.data.repository.CachedStopDetail
 import com.example.model.ArrivalItem
@@ -47,6 +48,12 @@ enum class SheetPosition {
     val isOpen: Boolean get() = this != HIDDEN && this != COLLAPSED
 }
 
+/** The two top-level screens. No navigation library: this is one field. */
+enum class AppScreen { FAVORITES, MAP }
+
+/** A row of the home grid: the bundled stop plus the label the user chose for it. */
+data class FavoriteTile(val stop: Stop, val label: String)
+
 data class BusUiState(
     val isOffline: Boolean = false,
     val isCheckingInternet: Boolean = false,
@@ -75,7 +82,13 @@ data class BusUiState(
     // One-shot camera request (lat, lng). focusToken increments so an identical
     // target still triggers a new move — the map only ever reacts to the token.
     val focusTarget: Pair<Double, Double>? = null,
-    val focusToken: Int = 0
+    val focusToken: Int = 0,
+    // Landing screen is Favorites; the map is entered from it.
+    val appScreen: AppScreen = AppScreen.FAVORITES,
+    val favoriteTiles: List<FavoriteTile> = emptyList(),
+    // Stop behind the home-screen popup, plus its cached detail for the header.
+    val popupStop: Stop? = null,
+    val popupStopDetail: CachedStopDetail? = null
 )
 
 class BusViewModel(application: Application) : AndroidViewModel(application) {
@@ -83,12 +96,14 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BusRepository(application)
     private val networkMonitor = NetworkMonitor(application)
     private val locationHelper = LocationHelper(application)
+    private val favoritesStore = FavoritesStore(application)
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(BusUiState(isDarkTheme = savedTheme(application)))
     val uiState: StateFlow<BusUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
+    private var pollingStopId: Long? = null
     private var consecutiveNetworkFailures = 0
     private var hasMadeFirstSuccessfulCall = false
     private var isAppResumed = true
@@ -143,6 +158,8 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
                 stops = stops,
                 hasLocationPermission = locationHelper.hasLocationPermission()
             )
+            // The grid can only be built once the bundled stop list is in memory.
+            refreshFavorites()
 
             // Try fetching initial notice
             val notice = repository.getNotice()
@@ -157,6 +174,98 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun getStopById(id: Long): Stop? = repository.getStopById(id)
+
+    // ------------------------------------------------------------- favourites
+
+    /**
+     * Rebuilds the home grid from the store. A saved id whose stop is no longer in
+     * the bundled list is dropped rather than rendered as an orphan tile.
+     */
+    private fun refreshFavorites() {
+        val tiles = favoritesStore.list().mapNotNull { favorite ->
+            val stop = getStopById(favorite.id) ?: return@mapNotNull null
+            FavoriteTile(stop, favoritesStore.labelFor(favorite.id, stop.name))
+        }
+        _uiState.value = _uiState.value.copy(favoriteTiles = tiles)
+    }
+
+    fun isFavorite(stop: Stop): Boolean = favoritesStore.isFavorite(stop.id)
+
+    fun toggleFavorite(stop: Stop) {
+        if (favoritesStore.isFavorite(stop.id)) favoritesStore.remove(stop.id)
+        else favoritesStore.add(stop.id)
+        refreshFavorites()
+    }
+
+    /** @return false when the label was refused (blank or too long); state is untouched. */
+    fun renameFavorite(stop: Stop, label: String): Boolean {
+        if (!favoritesStore.rename(stop.id, label)) return false
+        refreshFavorites()
+        return true
+    }
+
+    // ------------------------------------------------------- screen and popup
+
+    fun setAppScreen(screen: AppScreen) {
+        if (screen == _uiState.value.appScreen) return
+        // Switching screens must never leave a poller running behind us.
+        _uiState.value = _uiState.value.copy(
+            appScreen = screen,
+            popupStop = null,
+            popupStopDetail = null
+        )
+        // The map panel's list was cleared while the home screen owned the poller,
+        // so refresh it on arrival instead of leaving it blank for up to 20 seconds.
+        activeArrivalStop()?.let { fetchArrivals(it) }
+        syncArrivalsPolling()
+    }
+
+    /**
+     * The one stop allowed to poll right now: the popup on the home screen, or the
+     * open panel on the map — never both. The API has no batch call, so several
+     * live stops at once would mean several requests, which the app forbids.
+     */
+    private fun activeArrivalStop(): Stop? {
+        val state = _uiState.value
+        return when (state.appScreen) {
+            AppScreen.FAVORITES -> state.popupStop
+            AppScreen.MAP -> if (state.sheetPosition.isOpen) state.selectedStop else null
+        }
+    }
+
+    /** Points the single poller at [activeArrivalStop()], or stops it when there is none. */
+    private fun syncArrivalsPolling() {
+        val target = activeArrivalStop()
+        when {
+            target == null -> stopArrivalsPolling()
+            target.id != pollingStopId -> restartArrivalsPolling(target)
+        }
+    }
+
+    fun openArrivalPopup(stop: Stop) {
+        _uiState.value = _uiState.value.copy(
+            popupStop = stop,
+            popupStopDetail = null,
+            // Never show another stop's arrivals while this one loads.
+            arrivals = emptyList(),
+            arrivalsError = false,
+            secondsSinceUpdate = 0
+        )
+        // Address and station code are fetched once and cached forever upstream.
+        viewModelScope.launch {
+            val details = repository.getStopDetails(stop)
+            _uiState.value = _uiState.value.copy(popupStopDetail = details)
+            onNetworkSuccess()
+        }
+        fetchArrivals(stop)
+        restartArrivalsPolling(stop)
+    }
+
+    fun closeArrivalPopup() {
+        if (_uiState.value.popupStop == null) return
+        _uiState.value = _uiState.value.copy(popupStop = null, popupStopDetail = null)
+        syncArrivalsPolling()
+    }
 
     private fun onNetworkSuccess() {
         consecutiveNetworkFailures = 0
@@ -291,7 +400,6 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSheetPosition(position: SheetPosition) {
         _uiState.value = _uiState.value.copy(sheetPosition = position)
-        val selected = _uiState.value.selectedStop
         if (!position.isOpen) {
             stopArrivalsPolling()
             // Collapsing means "back to browsing nearby". The stop has to go with it:
@@ -303,8 +411,8 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
                 arrivals = emptyList(),
                 arrivalsError = false
             )
-        } else if (selected != null) {
-            restartArrivalsPolling(selected)
+        } else {
+            syncArrivalsPolling()
         }
     }
 
@@ -342,12 +450,7 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAppResumed(resumed: Boolean) {
         isAppResumed = resumed
-        val selected = _uiState.value.selectedStop
-        if (resumed && _uiState.value.sheetPosition.isOpen && selected != null) {
-            restartArrivalsPolling(selected)
-        } else {
-            stopArrivalsPolling()
-        }
+        if (resumed) syncArrivalsPolling() else stopArrivalsPolling()
     }
 
     private fun fetchArrivals(stop: Stop) {
@@ -374,20 +477,23 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restartArrivalsPolling(stop: Stop) {
         pollingJob?.cancel()
+        pollingStopId = stop.id
         // Reset here and tick inside the loop below. The old free-running freshness timer
         // kept counting while polling was paused (collapsed sheet, app in the background),
         // which is how the label reached 50s and 100s instead of staying inside 0-20s.
         _uiState.value = _uiState.value.copy(secondsSinceUpdate = 0)
+        // The gate is "I am still the active target" — not "the sheet is open": the same
+        // loop now serves the map panel and the home-screen popup, one at a time.
         pollingJob = viewModelScope.launch {
-            while (isActive && isAppResumed && _uiState.value.sheetPosition.isOpen) {
+            while (isActive && isAppResumed && activeArrivalStop()?.id == stop.id) {
                 for (second in 1..POLL_INTERVAL_SECONDS) {
                     delay(1000)
-                    if (!isActive || !isAppResumed || !_uiState.value.sheetPosition.isOpen) {
+                    if (!isActive || !isAppResumed || activeArrivalStop()?.id != stop.id) {
                         return@launch
                     }
                     _uiState.value = _uiState.value.copy(secondsSinceUpdate = second)
                 }
-                if (!isAppResumed || !_uiState.value.sheetPosition.isOpen) return@launch
+                if (!isAppResumed || activeArrivalStop()?.id != stop.id) return@launch
 
                 val result = repository.getArrivals(stop)
                 result.onSuccess { arrivals ->
@@ -408,6 +514,8 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     private fun stopArrivalsPolling() {
         pollingJob?.cancel()
         pollingJob = null
+        // Cleared so the next target is never mistaken for the one just stopped.
+        pollingStopId = null
     }
 
     fun getGeoJsonData(): String {
