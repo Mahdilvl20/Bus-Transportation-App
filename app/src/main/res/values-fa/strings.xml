@@ -43,4 +43,9 @@
     <string name="rename_too_long">نام نباید بیشتر از ۲۴ حرف باشد</string>
     <string name="rename_blank">نام را خالی نگذار</string>
     <string name="arriving_now">درحال ورود</string>
+    <!-- In-app update -->
+    <string name="update_available">نسخه‌ی جدید منتشر شد</string>
+    <string name="update_hint">اگه خواستی، برو آپدیت کن</string>
+    <string name="update_download">دانلود</string>
+    <string name="remove_favorite">حذف از علاقه‌مندی‌ها</string>
 </resources>

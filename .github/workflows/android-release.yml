@@ -36,13 +36,33 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
 
+      - name: Read the version from the tag
+        # The app compares this against what it has installed, so the tag is the single
+        # source of truth: v1.2.3 -> versionName 1.2.3, versionCode 10203.
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$TAG"
+          # Three digits per component, so no two tags can share a versionCode.
+          if [[ ! "$MAJOR" =~ ^[0-9]{1,3}$ ]] ||
+             [[ ! "$MINOR" =~ ^[0-9]{1,3}$ ]] ||
+             [[ ! "$PATCH" =~ ^[0-9]{1,3}$ ]]; then
+            echo "Tag '$GITHUB_REF_NAME' must be vMAJOR.MINOR.PATCH with each part <= 999" >&2
+            exit 1
+          fi
+          echo "VERSION_NAME=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))" >> "$GITHUB_ENV"
+
       - name: Build signed ABI-specific release APKs
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/release.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        run: ./gradlew assembleRelease -PabiSplits --stacktrace
+        run: >-
+          ./gradlew assembleRelease -PabiSplits
+          -PversionName=${{ env.VERSION_NAME }}
+          -PversionCode=${{ env.VERSION_CODE }}
+          --stacktrace
 
       - name: Verify every expected APK exists
         run: |

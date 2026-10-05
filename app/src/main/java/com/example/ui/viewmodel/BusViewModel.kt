@@ -2,11 +2,15 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.res.Configuration
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.AppUpdate
 import com.example.data.FavoritesStore
+import com.example.data.UpdateChecker
 import com.example.data.repository.BusRepository
 import com.example.data.repository.CachedStopDetail
 import com.example.model.ArrivalItem
@@ -88,7 +92,9 @@ data class BusUiState(
     val favoriteTiles: List<FavoriteTile> = emptyList(),
     // Stop behind the home-screen popup, plus its cached detail for the header.
     val popupStop: Stop? = null,
-    val popupStopDetail: CachedStopDetail? = null
+    val popupStopDetail: CachedStopDetail? = null,
+    // A newer release exists on GitHub; null when there is nothing to offer.
+    val updateAvailable: AppUpdate? = null
 )
 
 class BusViewModel(application: Application) : AndroidViewModel(application) {
@@ -97,6 +103,7 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
     private val networkMonitor = NetworkMonitor(application)
     private val locationHelper = LocationHelper(application)
     private val favoritesStore = FavoritesStore(application)
+    private val updateChecker = UpdateChecker(application)
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(BusUiState(isDarkTheme = savedTheme(application)))
@@ -160,6 +167,7 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
             )
             // The grid can only be built once the bundled stop list is in memory.
             refreshFavorites()
+            checkForUpdates()
 
             // Try fetching initial notice
             val notice = repository.getNotice()
@@ -195,6 +203,43 @@ class BusViewModel(application: Application) : AndroidViewModel(application) {
         if (favoritesStore.isFavorite(stop.id)) favoritesStore.remove(stop.id)
         else favoritesStore.add(stop.id)
         refreshFavorites()
+    }
+
+    fun removeFavorite(stop: Stop) {
+        favoritesStore.remove(stop.id)
+        refreshFavorites()
+    }
+
+    // ------------------------------------------------------------- update check
+
+    /**
+     * Asks for a newer release in the background. The checker is what makes this
+     * safe: cached for [UpdateChecker.CHECK_INTERVAL_MS], silent on every failure,
+     * and debug builds are skipped entirely, so no launch ever waits on GitHub.
+     */
+    private fun checkForUpdates() {
+        viewModelScope.launch {
+            val update = updateChecker.check() ?: return@launch
+            if (_uiState.value.updateAvailable?.versionCode != update.versionCode) {
+                _uiState.value = _uiState.value.copy(updateAvailable = update)
+            }
+        }
+    }
+
+    /** Remembered per version: the banner will not come back until the next release. */
+    fun dismissUpdate() {
+        val update = _uiState.value.updateAvailable ?: return
+        updateChecker.markDismissed(update.versionCode)
+        _uiState.value = _uiState.value.copy(updateAvailable = null)
+    }
+
+    /**
+     * Hands the ABI-matched URL to the browser. No DownloadManager and no
+     * REQUEST_INSTALL_PACKAGES: installing stays the user's own long-standing path.
+     */
+    fun openUpdate() {
+        val url = _uiState.value.updateAvailable?.apkUrl ?: return
+        runCatching { getApplication<Application>().startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
 
     /** @return false when the label was refused (blank or too long); state is untouched. */

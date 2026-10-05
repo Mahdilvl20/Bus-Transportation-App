@@ -26,6 +26,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Star
@@ -103,6 +106,13 @@ fun FavoritesScreen(
         ) {
             FavoritesHeader(tileCount = uiState.favoriteTiles.size)
 
+            uiState.updateAvailable?.let {
+                UpdateBanner(
+                    onDownload = viewModel::openUpdate,
+                    onDismiss = viewModel::dismissUpdate
+                )
+            }
+
             // The bundled list loads a frame or two in; showing "nothing saved yet"
             // before it arrives would be a lie the user sees on every cold start.
             if (uiState.favoriteTiles.isEmpty() && uiState.stops.isNotEmpty()) {
@@ -165,6 +175,10 @@ fun FavoritesScreen(
                     val accepted = viewModel.renameFavorite(target.stop, label)
                     if (accepted) renameTarget = null
                     accepted
+                },
+                onDelete = {
+                    viewModel.removeFavorite(target.stop)
+                    renameTarget = null
                 },
                 onDismiss = { renameTarget = null }
             )
@@ -337,10 +351,78 @@ private fun EmptyFavorites(modifier: Modifier = Modifier) {
  * Single-field rename. Validation runs here as well as in the store so the message
  * appears inline instead of the save button silently doing nothing.
  */
+/**
+ * One line of chrome for "a newer release exists". Dismissing it is remembered for
+ * that version only, so it comes back exactly once per release and never again.
+ */
+@Composable
+private fun UpdateBanner(
+    onDownload: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp)
+            .testTag("update_banner")
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(id = R.string.update_available),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = stringResource(id = R.string.update_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+
+            Button(
+                onClick = onDownload,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(id = R.string.update_download),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(id = R.string.dismiss),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RenameStopDialog(
     currentLabel: String,
     onConfirm: (String) -> Boolean,
+    onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var text by remember { mutableStateOf(currentLabel) }
@@ -356,11 +438,33 @@ private fun RenameStopDialog(
             modifier = Modifier.width(320.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = stringResource(id = R.string.rename_stop),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.rename_stop),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    // Removal sits opposite the title instead of crowding the action row:
+                    // a lone icon, red, out of the way of "save".
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("remove_favorite_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(id = R.string.remove_favorite),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -384,21 +488,39 @@ private fun RenameStopDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Cancel / confirm at the far end (left in RTL, the platform convention),
+                // diagonally away from delete so no two neighbouring taps do opposite jobs.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     TextButton(onClick = onDismiss) {
-                        Text(stringResource(id = R.string.cancel))
+                        Text(
+                            text = stringResource(id = R.string.cancel),
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        val clean = text.trim()
-                        errorRes = when {
-                            clean.isEmpty() -> R.string.rename_blank
-                            clean.length > FavoritesStore.MAX_LABEL_LENGTH -> R.string.rename_too_long
-                            // The store can still refuse (unknown id); report it as blank.
-                            else -> if (onConfirm(clean)) 0 else R.string.rename_blank
-                        }
-                    }) {
-                        Text(stringResource(id = R.string.save))
+                    Button(
+                        onClick = {
+                            val clean = text.trim()
+                            errorRes = when {
+                                clean.isEmpty() -> R.string.rename_blank
+                                clean.length > FavoritesStore.MAX_LABEL_LENGTH -> R.string.rename_too_long
+                                // The store can still refuse (unknown id); report it as blank.
+                                else -> if (onConfirm(clean)) 0 else R.string.rename_blank
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.save),
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }

@@ -18,6 +18,12 @@ val releaseKeystorePath: String? = System.getenv("KEYSTORE_PATH")
 // universal APK, so per-architecture builds are worth offering — just not by default.
 val abiSplitsEnabled: Boolean = project.hasProperty("abiSplits")
 
+// The release workflow passes the version it read from the git tag, so the in-app
+// update check has a number that actually moves. Everything else stays 1 / "1.0" —
+// without these two properties nothing about local or CI snapshot builds changes.
+val tagVersionCode: Int? = (findProperty("versionCode") as String?)?.toIntOrNull()
+val tagVersionName: String? = findProperty("versionName") as String?
+
 
 android {
   namespace = "com.example"
@@ -29,6 +35,8 @@ android {
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
+    tagVersionCode?.let { versionCode = it }
+    tagVersionName?.let { versionName = it }
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
